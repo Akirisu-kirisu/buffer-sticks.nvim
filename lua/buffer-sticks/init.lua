@@ -222,6 +222,7 @@ local state = {
 ---@field move_down string Key to move selection down in list mode
 
 ---@class BufferSticksFilterKeys
+---@field clean string Key to clean filter mode
 ---@field enter string Key to enter filter mode
 ---@field confirm string Key to confirm selection in filter mode
 ---@field exit string Key to exit filter mode
@@ -307,6 +308,7 @@ local config = {
 			active_indicator = "•",
 			fuzzy_cutoff = 100,
 			keys = {
+				clean = "<A-w>",
 				enter = "/",
 				confirm = "<CR>",
 				exit = "<Esc>",
@@ -559,10 +561,14 @@ local function right_align_lines(lines, width)
 	local aligned_lines = {}
 	for _, line in ipairs(lines) do
 		local content_width = vim.fn.strwidth(line)
-		local padding = width - content_width
-		local aligned_line = string.rep(" ", math.max(0, config.padding.left + padding))
+
+		-- how much space remains after the text
+		local remaining = width - content_width
+
+		local aligned_line = string.rep(" ", math.max(0, config.padding.left))
 			.. line
-			.. string.rep(" ", math.max(0, config.padding.right))
+			.. string.rep(" ", math.max(0, remaining + config.padding.right))
+
 		table.insert(aligned_lines, aligned_line)
 	end
 	return aligned_lines
@@ -885,9 +891,13 @@ local function create_or_update_floating_window()
 	local height = content_height + config.padding.top + config.padding.bottom
 	local width = content_width + config.padding.left + config.padding.right
 
+	-- local width = math.floor(vim.o.columns * 0.1) -- 30% width
+	-- local height = vim.o.lines - 2 -- full height minus statusline
+
 	-- Position on the right side of the screen
 	local col = vim.o.columns - width - config.offset.x
-	local row = math.floor((vim.o.lines - height) / 2) + config.offset.y
+	-- local col = 0 + config.offset.x
+	local row = math.floor((vim.o.lines - height) / 2) + config.offset.y - 20
 
 	-- Create buffer if needed
 	if not vim.api.nvim_buf_is_valid(state.buf) then
@@ -1546,6 +1556,7 @@ function M.list(opts)
 	end
 
 	state.list_mode = true
+	state.filter_mode = false
 	state.list_input = ""
 	state.list_action = action
 	state.list_mode_selected_index = nil
@@ -1648,6 +1659,20 @@ function M.list(opts)
 		-- If in filter mode, handle filter-specific input
 		if state.filter_mode then
 			local filter_keys = config.list and config.list.filter and config.list.filter.keys or {}
+
+			local clean_seq = vim.api.nvim_replace_termcodes(filter_keys.clean, true, true, true)
+
+			-- Handle "clean filter" key
+			if type(char_str) == "string" and char_str == clean_seq then
+				-- Clear filter input and reset selection
+				state.filter_input = ""
+				state.filter_selected_index = 1
+				-- Optionally exit filter mode or keep it active
+				state.filter_mode = true
+				update_display()
+				vim.schedule(handle_input)
+				return
+			end
 
 			-- Handle up arrow (check for both escape sequence and Vim's key notation)
 			if should_trigger(char_str, filter_keys.move_up, fallback_up) then
@@ -1853,6 +1878,7 @@ function M.list(opts)
 
 		-- Check if user wants to enter filter mode (must come before word character check)
 		local filter_keys = config.list and config.list.filter and config.list.filter.keys or {}
+
 		if filter_keys.enter == "/" and type(char_str) == "string" and char_str == "/" then
 			state.filter_mode = true
 			state.filter_input = ""
