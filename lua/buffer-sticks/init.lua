@@ -487,7 +487,6 @@ local function get_buffer_list()
 	local alternate_buf = vim.fn.bufnr("#")
 	local buffer_ids = {}
 
-	-- Collect filtered buffers
 	for _, buf in ipairs(vim.api.nvim_list_bufs()) do
 		if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].buflisted then
 			local buf_name = vim.api.nvim_buf_get_name(buf)
@@ -526,9 +525,11 @@ local function get_buffer_list()
 			end
 
 			if should_include then
+				local display_name = vim.fn.fnamemodify(buf_name, ":.") -- relative path from cwd
 				table.insert(buffers, {
 					id = buf,
-					name = buf_name,
+					name = buf_name,            -- absolute path
+					display_name = display_name, -- relative path for fuzzy filter / list
 					is_current = buf == current_buf,
 					is_modified = vim.bo[buf].modified,
 					is_alternate = buf == alternate_buf,
@@ -538,14 +539,12 @@ local function get_buffer_list()
 		end
 	end
 
-	-- Check if we need to regenerate labels
+	-- Regenerate cached labels if the buffer list changed
 	if has_buffer_list_changed(buffer_ids) then
-		-- Generate new labels and cache them
 		state.cached_labels = generate_unique_labels(buffers)
 		state.cached_buffer_ids = buffer_ids
 	end
 
-	-- Assign cached labels to buffers
 	for _, buffer in ipairs(buffers) do
 		buffer.label = state.cached_labels[buffer.id] or "?"
 	end
@@ -962,21 +961,18 @@ end
 ---@param buffers BufferInfo[] List of buffers to filter
 ---@param display_paths table<integer, string> Map of buffer.id to display path
 ---@return integer[] filtered_indices Indices of matched buffers
-local function apply_fuzzy_filter(buffers, display_paths)
-	-- Build candidate array for filtering
+local function apply_fuzzy_filter(buffers)
 	local candidates = {}
 	for _, buffer in ipairs(buffers) do
-		local display_name = display_paths[buffer.id] or vim.fn.fnamemodify(buffer.name, ":t")
-		table.insert(candidates, display_name)
+		-- use display_name (relative path)
+		table.insert(candidates, buffer.display_name or vim.fn.fnamemodify(buffer.name, ":t"))
 	end
 
-	-- Apply fuzzy filter
 	local filter_config = config.list and config.list.filter or {}
 	local cutoff = filter_config.fuzzy_cutoff or 100
 	local _, filtered_indices = fuzzy_filtersort(state.filter_input, candidates, cutoff)
 	return filtered_indices
 end
-
 ---Render buffer indicators in the floating window
 ---Updates the buffer content and applies appropriate highlighting
 local function render_buffers()
