@@ -295,7 +295,7 @@ local config = {
 	auto_hide = true,
 	label = { show = "list" },
 	list = {
-		show = { "filename", "space", "label" },
+		show = { "filename", "space", "label" , "relative"},
 		active_indicator = "•",
 		keys = {
 			close_buffer = "<C-q>",
@@ -1416,13 +1416,21 @@ local function create_preview_float(buffer_id)
 	-- Handle title configuration: nil/true = filename, false = no title, string = custom
 	if preview_config.title ~= false then
 		local title_text
-		if type(preview_config.title) == "string" then
+
+		if preview_config.title == "relative" then
+			-- Use relative path from current working directory
+			local buf_name = vim.api.nvim_buf_get_name(buffer_id)
+			title_text = buf_name ~= "" and vim.fn.fnamemodify(buf_name, ":.") or "[No Name]"
+
+		elseif type(preview_config.title) == "string" then
 			title_text = preview_config.title
+
 		else
-			-- Default: show filename
+			-- Default: show filename only
 			local buf_name = vim.api.nvim_buf_get_name(buffer_id)
 			title_text = buf_name ~= "" and vim.fn.fnamemodify(buf_name, ":t") or "[No Name]"
 		end
+
 		win_config.title = " " .. title_text .. " "
 		win_config.title_pos = preview_config.title_pos or "center"
 	end
@@ -1555,8 +1563,8 @@ function M.list(opts)
 		M.show()
 	end
 
-	state.list_mode = true
-	state.filter_mode = false
+	state.list_mode = false
+	state.filter_mode = true
 	state.list_input = ""
 	state.list_action = action
 	state.list_mode_selected_index = nil
