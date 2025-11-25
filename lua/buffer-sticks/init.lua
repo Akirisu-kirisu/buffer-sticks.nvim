@@ -1417,8 +1417,36 @@ local function create_preview_float(buffer_id)
 		win_config.title_pos = preview_config.title_pos or "center"
 	end
 
-	if preview_config.footer then
-		win_config.footer = preview_config.footer
+	-- Copied from init.lua
+	-- inside create_preview_float() or wherever preview window is created
+	-- FOOTER HANDLING (mirrors title logic)
+	if preview_config.footer ~= false then
+		local footer_text
+
+		if type(preview_config.footer) == "string" then
+			if preview_config.footer == "location" then
+				-- Full path of the previewed buffer
+				if type(buffer_id) == "number" and vim.api.nvim_buf_is_valid(buffer_id) then
+					local name = vim.api.nvim_buf_get_name(buffer_id)
+					footer_text = name ~= "" and name or "[No Name]"
+				else
+					footer_text = "[No Name]"
+				end
+			else
+				-- Custom literal footer
+				footer_text = preview_config.footer
+			end
+		else
+			-- Default: show filename (same behavior as title)
+			if type(buffer_id) == "number" and vim.api.nvim_buf_is_valid(buffer_id) then
+				local name = vim.api.nvim_buf_get_name(buffer_id)
+				footer_text = name ~= "" and vim.fn.fnamemodify(name, ":t") or "[No Name]"
+			else
+				footer_text = "[No Name]"
+			end
+		end
+
+		win_config.footer = " " .. footer_text .. " "
 		win_config.footer_pos = preview_config.footer_pos or "center"
 	end
 
