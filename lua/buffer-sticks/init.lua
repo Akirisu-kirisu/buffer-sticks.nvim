@@ -1723,23 +1723,40 @@ function M.list(opts)
 				local buffers = get_buffer_list()
 				local display_paths = get_display_paths(buffers)
 				local filtered_indices = apply_fuzzy_filter(buffers, display_paths)
+				local count = #filtered_indices
 
-				if #filtered_indices > 0 then
-					local selected_buffer = buffers[filtered_indices[state.filter_selected_index]]
-					if selected_buffer then
-						if type(state.list_action) == "function" then
-							state.list_action(selected_buffer, function()
-								leave(false)
-							end)
-						elseif state.list_action == "open" then
-							vim.api.nvim_set_current_buf(selected_buffer.id)
+				-- 🔥 FIX 1: If NO results, clear preview + reset filter + redraw
+				if count == 0 then
+					state.filter_input = ""
+					state.filter_selected_index = 1
+
+					-- close preview window if it exists
+					if state.preview_win and vim.api.nvim_win_is_valid(state.preview_win) then
+						vim.api.nvim_win_close(state.preview_win, true)
+						state.preview_win = nil
+					end
+
+					update_display()
+					vim.schedule(handle_input)
+					return
+				end
+
+				-- 🔥 If results exist, continue normal logic
+				local selected_buffer = buffers[filtered_indices[state.filter_selected_index]]
+				if selected_buffer then
+					if type(state.list_action) == "function" then
+						state.list_action(selected_buffer, function()
 							leave(false)
-						elseif state.list_action == "close" then
-							vim.api.nvim_buf_delete(selected_buffer.id, { force = false })
-							leave(false)
-						end
+						end)
+					elseif state.list_action == "open" then
+						vim.api.nvim_set_current_buf(selected_buffer.id)
+						leave(false)
+					elseif state.list_action == "close" then
+						vim.api.nvim_buf_delete(selected_buffer.id, { force = false })
+						leave(false)
 					end
 				end
+
 				return
 			end
 
